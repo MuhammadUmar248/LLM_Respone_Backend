@@ -58,6 +58,12 @@ Now provide the answer based on the topic above:
 async def root():
     return {"message": "Backend is running ✅"}
 
+@app.get("/test-db")
+async def test_db():
+    doc = await chat_collection.find_one({})
+    return {"ok": True, "sample": str(doc.get("_id")) if doc else None}
+
+
 @app.get("/generate/{prompt_id}")
 async def generate_response(prompt_id: str):
     # 1️⃣ Fetch prompt from DB
