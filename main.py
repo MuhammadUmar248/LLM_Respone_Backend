@@ -3,14 +3,28 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from database import chat_collection
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from bson import ObjectId
+
 
 
 
 load_dotenv()
  
 app = FastAPI()
+
+origins = [
+    "http://localhost:3000",  
+    # "https://your-frontend-domain.vercel.app"  # deployed frontend (if applicable)
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 llm = ChatGoogleGenerativeAI(model="gemini-flash-latest")
