@@ -53,6 +53,11 @@ Now provide the answer based on the topic above:
 """
 )
 
+
+@app.get("/")
+async def root():
+    return {"message": "Backend is running ✅"}
+
 @app.get("/generate/{prompt_id}")
 async def generate_response(prompt_id: str):
     # 1️⃣ Fetch prompt from DB
