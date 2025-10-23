@@ -47,13 +47,18 @@ Response Rules:
 - If applicable, provide only the **best** method or **one main approach**, not multiple long explanations
 
 Now provide the answer based on the topic above:
+
+
+
 """
 )
 
 @app.get("/generate/{prompt_id}")
 async def generate_response(prompt_id: str):
     # 1️⃣ Fetch prompt from DB
+
     prompt_data = await chat_collection.find_one({"_id": ObjectId(prompt_id)})
+
 
     print(prompt_data)
     
