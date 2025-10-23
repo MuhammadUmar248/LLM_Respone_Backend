@@ -7,10 +7,14 @@ load_dotenv()
 
 MONGODB_URL = os.getenv("MONGODB_URL")
 
-client = AsyncIOMotorClient(MONGODB_URL, tls=True, tlsCAFile=certifi.where())
+client = None
+database = None
+chat_collection = None
 
-database = client["alteregodb"]
-
-chat_collection = database["Chat"]
-
-print("✅ MongoDB Connected (alteregodb.Chat)")
+def get_db():
+    global client, database, chat_collection
+    if client is None:
+        client = AsyncIOMotorClient(MONGODB_URL, tls=True, tlsCAFile=certifi.where())
+        database = client["alteregodb"]
+        chat_collection = database["Chat"]
+    return chat_collection
