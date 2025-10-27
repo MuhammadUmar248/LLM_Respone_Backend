@@ -52,7 +52,6 @@ async def test_db():
     doc = await chat_collection.find_one({})
     return {"ok": True, "sample": str(doc.get("_id")) if doc else None}
 
-
 @app.get("/generate/{prompt_id}")
 async def generate_response(prompt_id: str):
     try:
@@ -63,40 +62,19 @@ async def generate_response(prompt_id: str):
         if not prompt_data:
             raise HTTPException(status_code=404, detail="Prompt not found")
 
-        # Build the runnable pipeline once
         runnable_chain = prompt | llm | StrOutputParser()
         inputs = {
             "topicTitle": prompt_data.get("topicTitle", ""),
             "question": prompt_data.get("question", "")
         }
 
-        # 1) Preferred: run the runnable asynchronously in the current event loop
-        try:
-            result = await runnable_chain.ainvoke(inputs)
-        except Exception as e_async:
-            # If the async path fails (for example "Event loop is closed" or other RuntimeErrors),
-            # fall back to executing in a separate thread with a fresh event loop.
-            print("⚠️ async invoke failed, falling back to thread():", repr(e_async))
+        # ✅ DO NOT use .ainvoke()
+        # ✅ DO NOT create new event loop
+        # ✅ .invoke() inside to_thread() is safest
+        def sync_llm():
+            return runnable_chain.invoke(inputs)
 
-            def thread_fn():
-                # Create and use a fresh event loop inside the thread to avoid "Event loop is closed" errors
-                import asyncio as _asyncio
-                loop = _asyncio.new_event_loop()
-                _asyncio.set_event_loop(loop)
-                try:
-                    return loop.run_until_complete(runnable_chain.ainvoke(inputs))
-                finally:
-                    try:
-                        loop.close()
-                    except Exception:
-                        pass
-
-            result = await asyncio.to_thread(thread_fn)
-
-        # Ensure result is serializable
-        if hasattr(result, "__dict__"):
-            # best-effort conversion
-            result = str(result)
+        result = await asyncio.to_thread(sync_llm)
 
         return {
             "prompt_id": prompt_id,
