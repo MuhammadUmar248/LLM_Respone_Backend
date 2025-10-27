@@ -1,16 +1,23 @@
 from fastapi import FastAPI
 from langchain_google_genai import ChatGoogleGenerativeAI
+import google.generativeai as genai
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from database import chat_collection
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from bson import ObjectId
+import os
 
 
 
 
 load_dotenv()
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
+MONGODB_URL = os.getenv("MONGODB_URL")
+print("MongoDB URL Loaded in main:", MONGODB_URL is not None)
+
  
 app = FastAPI()
 
