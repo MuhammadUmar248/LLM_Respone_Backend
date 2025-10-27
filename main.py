@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from bson import ObjectId
 from database import get_database
+import os
 
 load_dotenv()
 
@@ -14,6 +15,9 @@ app = FastAPI()
 # ✅ create DB once & attach to app.state to persist in Vercel
 app.state.db = get_database()
 chat_collection = app.state.db["Chat"]
+
+print("✅ Using MongoDB URL:", os.environ.get("MONGODB_URL") is not None)
+
 
 app.add_middleware(
     CORSMiddleware,

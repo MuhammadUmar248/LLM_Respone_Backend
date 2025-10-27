@@ -1,14 +1,12 @@
 import certifi
 from motor.motor_asyncio import AsyncIOMotorClient
-from dotenv import load_dotenv
 import os
 
-load_dotenv()
-
-MONGODB_URL = os.getenv("MONGODB_URL")
+MONGODB_URL = os.environ.get("MONGODB_URL")  # ✅ Production safe
 DATABASE_NAME = "alteregodb"
 
 def get_database():
+    if not MONGODB_URL:
+        raise Exception("❌ MONGODB_URL is not set")
     client = AsyncIOMotorClient(MONGODB_URL, tls=True, tlsCAFile=certifi.where())
-    db = client[DATABASE_NAME]
-    return db
+    return client[DATABASE_NAME]
