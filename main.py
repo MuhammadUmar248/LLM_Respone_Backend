@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+import asyncio
+from fastapi import HTTPException
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -55,22 +57,22 @@ from fastapi import HTTPException
 @app.get("/generate/{prompt_id}")
 async def generate_response(prompt_id: str):
     try:
-        # ✅ 1. Check valid ObjectId
         if not ObjectId.is_valid(prompt_id):
-            return {"error": "Invalid prompt_id format"}
+            raise HTTPException(status_code=400, detail="Invalid prompt_id format")
 
-        # ✅ 2. Fetch record from DB
         prompt_data = await chat_collection.find_one({"_id": ObjectId(prompt_id)})
         if not prompt_data:
-            return {"error": "Prompt not found"}
+            raise HTTPException(status_code=404, detail="Prompt not found")
 
-        # ✅ 3. Call LLM (async recommended in FastAPI)
-        result = await (prompt | llm | StrOutputParser()).ainvoke({
-            "topicTitle": prompt_data.get("topicTitle", ""),
-            "question": prompt_data.get("question", "")
-        })
+        # ✅ RUN LLM IN A THREAD (important for Vercel)
+        async def run_llm():
+            return await (prompt | llm | StrOutputParser()).ainvoke({
+                "topicTitle": prompt_data.get("topicTitle", ""),
+                "question": prompt_data.get("question", "")
+            })
 
-        # ✅ 4. Return clean response
+        result = await asyncio.to_thread(asyncio.run, run_llm())
+
         return {
             "prompt_id": prompt_id,
             "prompt": prompt_data.get("question", ""),
@@ -78,6 +80,5 @@ async def generate_response(prompt_id: str):
         }
 
     except Exception as e:
-        print("❌ Error inside /generate route:", e)
+        print("❌ Error in /generate:", e)
         raise HTTPException(status_code=500, detail=str(e))
-
