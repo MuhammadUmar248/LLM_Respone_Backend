@@ -13,7 +13,7 @@ load_dotenv()
 
 app = FastAPI()
 
-# create DB once & attach to app.state to persist in Vercel
+# attach DB to app.state to persist across cold starts
 app.state.db = get_database()
 chat_collection = app.state.db["Chat"]
 
@@ -28,9 +28,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# LLM (make sure GOOGLE_API_KEY is set in env)
+# LLM init (sync usage only)
 llm = ChatGoogleGenerativeAI(model="gemini-flash-latest")
-
 prompt = PromptTemplate(
     input_variables=["topicTitle", "question"],
     template="""
@@ -45,7 +44,6 @@ Provide a short response (2-3 lines).
 @app.get("/")
 async def root():
     return {"message": "Backend is running ✅"}
-
 
 @app.get("/test-db")
 async def test_db():
@@ -62,19 +60,18 @@ async def generate_response(prompt_id: str):
         if not prompt_data:
             raise HTTPException(status_code=404, detail="Prompt not found")
 
+        # runnable pipeline (sync)
         runnable_chain = prompt | llm | StrOutputParser()
         inputs = {
             "topicTitle": prompt_data.get("topicTitle", ""),
             "question": prompt_data.get("question", "")
         }
 
-        # ✅ DO NOT use .ainvoke()
-        # ✅ DO NOT create new event loop
-        # ✅ .invoke() inside to_thread() is safest
-        def sync_llm():
+        # ✅ run synchronously in its own thread (safe on Vercel)
+        def run_sync():
             return runnable_chain.invoke(inputs)
 
-        result = await asyncio.to_thread(sync_llm)
+        result = await asyncio.to_thread(run_sync)
 
         return {
             "prompt_id": prompt_id,
