@@ -6,15 +6,8 @@ import os
 load_dotenv()
 
 MONGODB_URL = os.getenv("MONGODB_URL")
-
-client = None
-database = None
-chat_collection = None
-
-def get_db():
-    global client, database, chat_collection
-    if client is None:
-        client = AsyncIOMotorClient(MONGODB_URL, tls=True, tlsCAFile=certifi.where())
-        database = client["alteregodb"]
-        chat_collection = database["Chat"]
-    return chat_collection
+DATABASE_NAME = "alteregodb"
+# MongoDB connection
+client = AsyncIOMotorClient(MONGODB_URL, tls=True, tlsCAFile=certifi.where())
+database = client[DATABASE_NAME]
+chat_collection = database["Chat"]
