@@ -50,10 +50,6 @@ async def root():
 async def test_db():
     doc = await chat_collection.find_one({})
     return {"ok": True, "sample": str(doc.get("_id")) if doc else None}
-
-from bson import ObjectId
-from fastapi import HTTPException
-
 @app.get("/generate/{prompt_id}")
 async def generate_response(prompt_id: str):
     try:
@@ -64,14 +60,14 @@ async def generate_response(prompt_id: str):
         if not prompt_data:
             raise HTTPException(status_code=404, detail="Prompt not found")
 
-        # ✅ RUN LLM IN A THREAD (important for Vercel)
-        async def run_llm():
-            return await (prompt | llm | StrOutputParser()).ainvoke({
+        # ✅ run pipeline in a THREAD as *sync*, not async
+        def sync_llm():
+            return (prompt | llm | StrOutputParser()).invoke({
                 "topicTitle": prompt_data.get("topicTitle", ""),
                 "question": prompt_data.get("question", "")
             })
 
-        result = await asyncio.to_thread(asyncio.run, run_llm())
+        result = await asyncio.to_thread(sync_llm)
 
         return {
             "prompt_id": prompt_id,
