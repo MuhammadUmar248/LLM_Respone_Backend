@@ -49,20 +49,35 @@ async def test_db():
     doc = await chat_collection.find_one({})
     return {"ok": True, "sample": str(doc.get("_id")) if doc else None}
 
+from bson import ObjectId
+from fastapi import HTTPException
+
 @app.get("/generate/{prompt_id}")
 async def generate_response(prompt_id: str):
-    prompt_data = await chat_collection.find_one({"_id": ObjectId(prompt_id)})
+    try:
+        # ✅ 1. Check valid ObjectId
+        if not ObjectId.is_valid(prompt_id):
+            return {"error": "Invalid prompt_id format"}
 
-    if not prompt_data:
-        return {"error": "Prompt not found"}
+        # ✅ 2. Fetch record from DB
+        prompt_data = await chat_collection.find_one({"_id": ObjectId(prompt_id)})
+        if not prompt_data:
+            return {"error": "Prompt not found"}
 
-    result = (prompt | llm | StrOutputParser()).invoke({
-        "topicTitle": prompt_data["topicTitle"],
-        "question": prompt_data["question"]
-    })
+        # ✅ 3. Call LLM (async recommended in FastAPI)
+        result = await (prompt | llm | StrOutputParser()).ainvoke({
+            "topicTitle": prompt_data.get("topicTitle", ""),
+            "question": prompt_data.get("question", "")
+        })
 
-    return {
-        "prompt_id": prompt_id,
-        "prompt": prompt_data["question"],
-        "response": result
-    }
+        # ✅ 4. Return clean response
+        return {
+            "prompt_id": prompt_id,
+            "prompt": prompt_data.get("question", ""),
+            "response": result
+        }
+
+    except Exception as e:
+        print("❌ Error inside /generate route:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
