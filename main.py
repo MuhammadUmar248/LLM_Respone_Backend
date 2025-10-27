@@ -1,39 +1,25 @@
 from fastapi import FastAPI
 from langchain_google_genai import ChatGoogleGenerativeAI
-import google.generativeai as genai
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from database import chat_collection
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from bson import ObjectId
-import os
-
-
-
 
 load_dotenv()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
-MONGODB_URL = os.getenv("MONGODB_URL")
-print("MongoDB URL Loaded in main:", MONGODB_URL is not None)
-
- 
 app = FastAPI()
 
-origins = [
-    "http://localhost:3000",  
-    # "https://your-frontend-domain.vercel.app"  # deployed frontend (if applicable)
-]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # In production you can restrict if needed
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
+# ✅ Initialize LLM once (not per-request)
 llm = ChatGoogleGenerativeAI(model="gemini-flash-latest")
 
 prompt = PromptTemplate(
@@ -54,43 +40,35 @@ Response Rules:
 - If applicable, provide only the **best** method or **one main approach**, not multiple long explanations
 
 Now provide the answer based on the topic above:
-
-
-
 """
 )
-
 
 @app.get("/")
 async def root():
     return {"message": "Backend is running ✅"}
 
+# ✅ Test endpoint to confirm DB works on Vercel
 @app.get("/test-db")
 async def test_db():
     doc = await chat_collection.find_one({})
     return {"ok": True, "sample": str(doc.get("_id")) if doc else None}
 
-
 @app.get("/generate/{prompt_id}")
 async def generate_response(prompt_id: str):
     # 1️⃣ Fetch prompt from DB
-
     prompt_data = await chat_collection.find_one({"_id": ObjectId(prompt_id)})
-
-
-    print(prompt_data)
     
     if not prompt_data:
         return {"error": "Prompt not found"}
 
     prompt_question = prompt_data["question"]
     prompt_topic = prompt_data["topicTitle"]
-  
 
     parser = StrOutputParser()
     chain = prompt | llm | parser
 
-    result = chain.invoke({"topicTitle":  prompt_topic, "question": prompt_question})
+    # 2️⃣ Get LLM response
+    result = chain.invoke({"topicTitle": prompt_topic, "question": prompt_question})
 
     return {
         "prompt_id": prompt_id,
