@@ -1,6 +1,10 @@
 import certifi
 from motor.motor_asyncio import AsyncIOMotorClient
+from dotenv import load_dotenv
 import os
+
+load_dotenv()
+
 
 MONGODB_URL = os.environ.get("MONGODB_URL")  # ✅ Production safe
 DATABASE_NAME = "alteregodb"

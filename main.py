@@ -3,7 +3,6 @@ import asyncio
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from google.api_core.exceptions import ResourceExhausted
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from bson import ObjectId
@@ -81,11 +80,8 @@ async def generate_response(prompt_id: str):
             "response": result
         }
 
-    except ResourceExhausted:
-        raise HTTPException(
-            status_code=429,
-            detail="Free tier quota exceeded. Please wait 20-30 seconds and try again."
-        )
+    except HTTPException:
+        raise
     except Exception as e:
         print("❌ Error in /generate:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
