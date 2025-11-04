@@ -13,14 +13,15 @@ load_dotenv()
 
 app = FastAPI()
 
-
-# attach DB to app.state to persist across cold starts
+# Attach DB once on startup
 app.state.db = get_database()
 chat_collection = app.state.db["Chat"]
+topic_collection = app.state.db["Topic"]
 
-print("✅ Using MongoDB URL:", os.environ.get("MONGODB_URL") is not None)
-print("✅ Using GOOGLE_API_KEY:", os.environ.get("GOOGLE_API_KEY") is not None)
+print("✅ MongoDB Connected:", bool(os.environ.get("MONGODB_URL")))
+print("✅ Google API Key Loaded:", bool(os.environ.get("GOOGLE_API_KEY")))
 
+# Allow all origins for CORS (safe for dev — restrict later if needed)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,17 +30,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# LLM init (sync usage only)
+# Initialize LLM (Google Gemini)
 llm = ChatGoogleGenerativeAI(model="gemini-flash-latest")
+
 prompt = PromptTemplate(
-    input_variables=["topicTitle", "question"],
-    template="""
-You are an expert chatbot specialized in the topic: "{topicTitle}".
-
-User Question: {question}
-
-Provide a short response (2-3 lines).
-"""
+    input_variables=["topicTitle", "question", "instructions"],
+    template=(
+        "You are an expert chatbot specialized in the topic: '{topicTitle}'.\n\n"
+        "User Question: {question}\n\n"
+        "Follow these instructions: {instructions}\n"
+        "Provide a short, clear answer (1–2 sentences)."
+    )
 )
 
 @app.get("/")
@@ -49,34 +50,42 @@ async def root():
 @app.get("/test-db")
 async def test_db():
     doc = await chat_collection.find_one({})
-    return {"ok": True, "sample": str(doc.get("_id")) if doc else None}
+    return {"ok": True, "sample": str(doc.get('_id')) if doc else None}
 
-@app.get("/generate/{prompt_id}")
-async def generate_response(prompt_id: str):
+@app.get("/generate/{topic_id}")
+async def generate_response(topic_id: str):
     try:
-        if not ObjectId.is_valid(prompt_id):
-            raise HTTPException(status_code=400, detail="Invalid prompt_id format")
+        if not ObjectId.is_valid(topic_id):
+            raise HTTPException(status_code=400, detail="Invalid topic_id format")
 
-        prompt_data = await chat_collection.find_one({"_id": ObjectId(prompt_id)})
-        if not prompt_data:
-            raise HTTPException(status_code=404, detail="Prompt not found")
+        topic_data = await topic_collection.find_one({"_id": ObjectId(topic_id)})
+        if not topic_data:
+            raise HTTPException(status_code=404, detail="Topic not found")
 
-        # runnable pipeline (sync)
+        latest_chat = await chat_collection.find_one(
+            {"topicId": ObjectId(topic_id), "from": "user"},
+            sort=[("createdAt", -1)]
+        )
+
+        if not latest_chat:
+            raise HTTPException(status_code=404, detail="No user messages found")
+
+        print("✅ Topic:", topic_data.get("title"))
+        print("✅ Latest Chat:", latest_chat.get("text"))
+
         runnable_chain = prompt | llm | StrOutputParser()
+
         inputs = {
-            "topicTitle": prompt_data.get("topicTitle", ""),
-            "question": prompt_data.get("question", "")
+            "topicTitle": topic_data.get("title", ""),
+            "question": latest_chat.get("text", ""),
+            "instructions": topic_data.get("instructions", "")
         }
 
-        # ✅ run synchronously in its own thread (safe on Vercel)
-        def run_sync():
-            return runnable_chain.invoke(inputs)
-
-        result = await asyncio.to_thread(run_sync)
+        # Run safely in async environment
+        result = await asyncio.to_thread(runnable_chain.invoke, inputs)
 
         return {
-            "prompt_id": prompt_id,
-            "prompt": prompt_data.get("question", ""),
+            "topic_id": topic_id,
             "response": result
         }
 
